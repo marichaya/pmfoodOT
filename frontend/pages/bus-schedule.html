@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>P.M Food – ตารางแจ้งสายรถ</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap');
+* { font-family: 'Sarabun', sans-serif; }
+#sidebar { transition: transform .3s; }
+/* ปุ่มเปลี่ยนสี */
+.cbtn {
+  width: 28px; height: 28px; border-radius: 50%;
+  border: 3px solid transparent; cursor: pointer;
+  transition: all .18s; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.cbtn:hover { transform: scale(1.25); border-color: #94a3b8; }
+.cbtn.active {
+  border-color: #1e3a5f !important;
+  transform: scale(1.35);
+  box-shadow: 0 2px 10px rgba(0,0,0,.35);
+}
+/* note input */
+.note-in {
+  background: transparent; border: none;
+  border-bottom: 1.5px dashed #cbd5e1;
+  width: 100%; font-size: .82rem; padding: 2px 4px; outline: none;
+  transition: all .2s;
+}
+.note-in:focus {
+  border-bottom: 2px solid #3b82f6;
+  background: #eff6ff; border-radius: 4px 4px 0 0;
+}
+thead th { position: sticky; top: 0; z-index: 5; }
+</style>
+</head>
+<body class="bg-gray-50">
+<script src="/js/app.js"></script>
+<script>
+// สี bg ของแต่ละ status
+const ROW_BG = {
+  none:   '',
+  green:  '#dcfce7',
+  red:    '#fee2e2',
+  yellow: '#fef9c3',
+  blue:   '#dbeafe'
+};
+
+let noteTimers = {};
+let currentDate = '';
+
+(async () => {
+  if (!await App.init('ตารางแจ้งสายรถ', 'จัดการสายรถรับ-ส่ง พร้อมระบบสี')) return;
+  renderPage();
+  currentDate = App.getDate();
+  loadSchedule(currentDate);
+  window._onDateChange = d => { currentDate = d; loadSchedule(d); };
+})();
+
+function renderPage() {
+  document.getElementById('pageContent').innerHTML = `
+    <!-- Legend bar -->
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-5">
+      <div class="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+        <span class="font-semibold text-slate-700 shrink-0">ตำนานสี:</span>
+        <span class="flex items-center gap-1.5">
+          <span class="w-5 h-5 rounded bg-green-100 border border-green-400 inline-block"></span>เลิก 16:00
+        </span>
+        <span class="flex items-center gap-1.5">
+          <span class="w-5 h-5 rounded bg-red-100 border border-red-400 inline-block"></span>เลิก 19:00 (OT)
+        </span>
+        <span class="flex items-center gap-1.5">
+          <span class="w-5 h-5 rounded bg-yellow-100 border border-yellow-400 inline-block"></span>รวมสาย 16+19
+        </span>
+        <span class="flex items-center gap-1.5">
+          <span class="w-5 h-5 rounded bg-blue-100 border border-blue-400 inline-block"></span>เข้ากะดึก
+        </span>
+        <button onclick="saveAll()"
+          class="ml-auto flex items-center gap-2 bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm">
+          <i class="fas fa-floppy-disk"></i> บันทึกทั้งหมด
+        </button>
+      </div>
+    </div>
+
+    <!-- Table card -->
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <div class="bg-gradient-to-r from-slate-800 to-blue-900 px-6 py-4 flex items-center justify-between">
+        <h3 class="text-white font-bold text-lg flex items-center gap-2">
+          <i class="fas fa-bus text-blue-300"></i> สายรถรับ-ส่ง พนักงาน
+        </h3>
+        <span id="dtLbl" class="text-blue-200 text-sm"></span>
+      </div>
+
+      <div style="max-height:calc(100vh - 280px); overflow-y:auto; overflow-x:auto;">
+        <table class="w-full text-sm min-w-[820px]">
+          <thead>
+            <tr class="bg-gray-50 border-b border-gray-200 text-slate-600 text-xs">
+              <th class="text-left px-4 py-3 font-semibold min-w-[170px]">สายรถรับ-ส่ง</th>
+              <th class="text-center px-3 py-3 font-medium w-24">จุดงาน</th>
+              <th class="text-center px-3 py-3 font-semibold w-20">07:00 น.<br><span class="font-normal text-slate-400">จำนวนมา</span></th>
+              <th class="text-center px-3 py-3 font-semibold w-20 text-blue-600">19:00 น.<br><span class="font-normal text-blue-400">ทำ OT</span></th>
+              <th class="text-center px-3 py-3 font-semibold w-20 text-slate-500">16:00 น.<br><span class="font-normal text-slate-400">ไม่ OT</span></th>
+              <th class="text-left px-3 py-3 font-semibold min-w-[150px]">ปกติ/รวมสาย 16:00</th>
+              <th class="text-left px-3 py-3 font-semibold min-w-[150px]">วิ่ง OT 19:00</th>
+              <th class="text-center px-3 py-3 font-semibold w-40">เปลี่ยนสีแถว</th>
+            </tr>
+          </thead>
+          <tbody id="busBody">
+            <tr><td colspan="8" class="text-center py-10 text-slate-400">
+              <div class="w-7 h-7 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+              กำลังโหลด...
+            </td></tr>
+          </tbody>
+          <tfoot>
+            <tr class="bg-slate-50 border-t-2 border-slate-200 font-bold text-slate-700">
+              <td class="px-4 py-3" colspan="2">รวม</td>
+              <td class="px-3 py-3 text-center" id="ftTot">0</td>
+              <td class="px-3 py-3 text-center text-blue-700" id="ftOT">0</td>
+              <td class="px-3 py-3 text-center text-slate-500" id="ftNon">0</td>
+              <td colspan="3"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <!-- Color count bar -->
+      <div class="bg-gray-50 border-t border-gray-200 px-5 py-2.5 flex flex-wrap gap-5 text-xs text-slate-500">
+        <span>🟢 เลิก 16:00: <strong id="cG" class="text-green-700 text-sm">0</strong> สาย</span>
+        <span>🔴 เลิก 19:00: <strong id="cR" class="text-red-700 text-sm">0</strong> สาย</span>
+        <span>🟡 รวมสาย: <strong id="cY" class="text-yellow-700 text-sm">0</strong> สาย</span>
+        <span>🔵 กะดึก: <strong id="cB" class="text-blue-700 text-sm">0</strong> สาย</span>
+      </div>
+    </div>
+  `;
+}
+
+async function loadSchedule(date) {
+  const lbl = document.getElementById('dtLbl');
+  if (lbl) lbl.textContent = 'ประจำวันที่ ' + App.dateThLong(date);
+  App.loading(true);
+  try {
+    const r = await fetch(`/api/ot/summary-bus?date=${date}`).then(r => r.json());
+    buildTable(r.data || []);
+  } catch(e) {
+    App.toast('โหลดข้อมูลไม่ได้', 'error');
+  } finally {
+    App.loading(false);
+  }
+}
+
+function buildTable(rows) {
+  const tbody = document.getElementById('busBody');
+  if (!tbody) return;
+
+  let tTot = 0, tOT = 0, tNon = 0;
+  rows.forEach(r => { tTot += r.total_count; tOT += r.ot_total; tNon += r.non_ot_total; });
+
+  // สร้างแถวทีละอัน (ไม่ใช้ template literal ซับซ้อน เพื่อหลีกเลี่ยง onclick quote bug)
+  tbody.innerHTML = '';
+  rows.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.id = `br_${r.id}`;
+    tr.dataset.id = r.id;
+    tr.dataset.color = r.color_status || 'none';
+    tr.style.background = ROW_BG[r.color_status || 'none'] || '';
+    tr.style.borderTop = '1px solid #f1f5f9';
+    tr.style.transition = 'background .25s';
+
+    const routeLabel = r.route_number === '0'
+      ? 'มาเอง'
+      : `สาย ${r.route_number} <span style="color:#94a3b8;font-weight:400">${r.route_name}</span>`;
+
+    const otBadge = r.ot_total > 0
+      ? `<span style="background:#dbeafe;color:#1d4ed8;padding:1px 8px;border-radius:99px;font-size:.75rem;font-weight:700">${r.ot_total}</span>`
+      : `<span style="color:#cbd5e1">0</span>`;
+
+    tr.innerHTML = `
+      <td style="padding:10px 16px;font-weight:500;color:#334155">${routeLabel}</td>
+      <td style="padding:10px 12px;text-align:center;font-size:.78rem;color:#94a3b8">${r.job_zone || ''}</td>
+      <td style="padding:10px 12px;text-align:center;font-weight:600;color:#334155">${r.total_count || 0}</td>
+      <td style="padding:10px 12px;text-align:center">${otBadge}</td>
+      <td style="padding:10px 12px;text-align:center;color:#94a3b8">${r.non_ot_total || 0}</td>
+      <td style="padding:10px 12px">
+        <input type="text" value="${(r.note_1600 || '').replace(/"/g,'&quot;')}"
+          placeholder="ปกติ/รวมสาย..." class="note-in note16">
+      </td>
+      <td style="padding:10px 12px">
+        <input type="text" value="${(r.note_1900 || '').replace(/"/g,'&quot;')}"
+          placeholder="วิ่ง OT 19:00..." class="note-in note19">
+      </td>
+      <td style="padding:10px 12px">
+        <div style="display:flex;align-items:center;justify-content:center;gap:5px">
+          <button class="cbtn ${r.color_status === 'none' || !r.color_status ? 'active' : ''}"
+            style="background:#fff;border-color:#e2e8f0" title="ล้างสี"
+            data-routeid="${r.id}" data-color="none">
+            <i class="fas fa-times" style="font-size:10px;color:#94a3b8"></i>
+          </button>
+          <button class="cbtn ${r.color_status === 'green' ? 'active' : ''}"
+            style="background:#bbf7d0" title="เลิก 16:00 น."
+            data-routeid="${r.id}" data-color="green"></button>
+          <button class="cbtn ${r.color_status === 'red' ? 'active' : ''}"
+            style="background:#fecaca" title="เลิก 19:00 น. (OT)"
+            data-routeid="${r.id}" data-color="red"></button>
+          <button class="cbtn ${r.color_status === 'yellow' ? 'active' : ''}"
+            style="background:#fde68a" title="รวมสาย 16:00 + 19:00"
+            data-routeid="${r.id}" data-color="yellow"></button>
+          <button class="cbtn ${r.color_status === 'blue' ? 'active' : ''}"
+            style="background:#bfdbfe" title="เข้ากะดึก"
+            data-routeid="${r.id}" data-color="blue"></button>
+        </div>
+      </td>
+    `;
+
+    // ผูก event ปุ่มสี — ใช้ addEventListener แทน onclick string (ไม่มี quote bug)
+    tr.querySelectorAll('.cbtn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const routeId = btn.dataset.routeid;
+        const color   = btn.dataset.color;
+        setColor(routeId, color, tr, btn);
+      });
+    });
+
+    // ผูก event note inputs — auto-save หลังหยุดพิมพ์ 1.5 วิ
+    tr.querySelectorAll('.note-in').forEach(input => {
+      input.addEventListener('input', () => {
+        clearTimeout(noteTimers[r.id]);
+        noteTimers[r.id] = setTimeout(() => saveRow(r.id), 1500);
+      });
+    });
+
+    tbody.appendChild(tr);
+  });
+
+  // อัปเดต footer
+  document.getElementById('ftTot').textContent = tTot;
+  document.getElementById('ftOT').textContent  = tOT;
+  document.getElementById('ftNon').textContent  = tNon;
+  updateCounts();
+}
+
+// เปลี่ยนสีแถว — ฟังก์ชันหลัก
+function setColor(routeId, color, tr, clickedBtn) {
+  // 1. เปลี่ยน background ของแถว
+  tr.style.background = ROW_BG[color] || '';
+  tr.dataset.color = color;
+
+  // 2. ปุ่ม active — เอา active ออกจากทุกปุ่มในแถวนี้ แล้วใส่ให้ปุ่มที่คลิก
+  tr.querySelectorAll('.cbtn').forEach(b => b.classList.remove('active'));
+  clickedBtn.classList.add('active');
+
+  // 3. อัปเดตตัวนับสี
+  updateCounts();
+
+  // 4. บันทึกลง DB ทันที
+  saveRow(routeId);
+}
+
+function updateCounts() {
+  const c = { none:0, green:0, red:0, yellow:0, blue:0 };
+  document.querySelectorAll('#busBody tr[data-id]').forEach(tr => {
+    c[tr.dataset.color || 'none']++;
+  });
+  document.getElementById('cG').textContent = c.green;
+  document.getElementById('cR').textContent = c.red;
+  document.getElementById('cY').textContent = c.yellow;
+  document.getElementById('cB').textContent = c.blue;
+}
+
+async function saveRow(routeId) {
+  const tr = document.getElementById(`br_${routeId}`);
+  if (!tr) return;
+  try {
+    await fetch('/api/bus/schedule', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        date:         currentDate,
+        bus_route_id: routeId,
+        color_status: tr.dataset.color || 'none',
+        note_1600:    tr.querySelector('.note16')?.value || '',
+        note_1900:    tr.querySelector('.note19')?.value || ''
+      })
+    });
+  } catch(e) { /* ไม่แจ้ง toast ทุกครั้งเพื่อไม่รบกวน */ }
+}
+
+async function saveAll() {
+  const updates = [];
+  document.querySelectorAll('#busBody tr[data-id]').forEach(tr => {
+    updates.push({
+      bus_route_id: tr.dataset.id,
+      color_status: tr.dataset.color || 'none',
+      note_1600:    tr.querySelector('.note16')?.value || '',
+      note_1900:    tr.querySelector('.note19')?.value || ''
+    });
+  });
+
+  App.loading(true);
+  try {
+    const r = await fetch('/api/bus/schedule/bulk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: currentDate, updates })
+    }).then(r => r.json());
+
+    if (r.success) App.toast('บันทึกทั้งหมดสำเร็จ ✓', 'success');
+    else           App.toast('บันทึกไม่สำเร็จ: ' + r.message, 'error');
+  } catch(e) {
+    App.toast('เกิดข้อผิดพลาด', 'error');
+  } finally {
+    App.loading(false);
+  }
+}
+</script>
+</body>
+</html>
+

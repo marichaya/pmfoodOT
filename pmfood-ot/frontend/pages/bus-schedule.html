@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>P.M Food – ตารางแจ้งสายรถ</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap');
+*{font-family:'Sarabun',sans-serif}
+#sidebar{transition:transform .3s}
+.rn {background:#ffffff}.rg{background:#dcfce7}.rr{background:#fee2e2}.ry{background:#fef9c3}.rb{background:#dbeafe}
+.cb{width:26px;height:26px;border-radius:50%;border:2.5px solid transparent;cursor:pointer;transition:all .2s;flex-shrink:0}
+.cb:hover,.cb.on{border-color:#1e3a5f;transform:scale(1.3);box-shadow:0 2px 8px rgba(0,0,0,.25)}
+.ni{background:transparent;border:none;border-bottom:1.5px dashed #cbd5e1;width:100%;font-size:.8rem;padding:2px 6px;outline:none;transition:all .2s}
+.ni:focus{border-bottom:1.5px solid #3b82f6;background:#eff6ff;border-radius:4px 4px 0 0}
+thead th{position:sticky;top:0;z-index:5}
+</style>
+</head>
+<body class="bg-gray-50">
+<script src="/js/app.js"></script>
+<script>
+let timers={};
+
+(async()=>{
+  if(!await App.init('ตารางแจ้งสายรถ','จัดการสายรถรับ-ส่ง พร้อมระบบสี')) return;
+  renderPage();
+  loadSchedule(App.getDate());
+  window._onDateChange=d=>loadSchedule(d);
+})();
+
+function renderPage(){
+  document.getElementById('pageContent').innerHTML=`
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-5">
+      <div class="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+        <span class="font-semibold text-slate-700 shrink-0">ตำนานสี:</span>
+        <span class="flex items-center gap-1.5"><span class="w-4 h-4 rounded bg-green-100 border border-green-300 inline-block"></span><span>เลิก 16:00</span></span>
+        <span class="flex items-center gap-1.5"><span class="w-4 h-4 rounded bg-red-100 border border-red-300 inline-block"></span><span>เลิก 19:00 (OT)</span></span>
+        <span class="flex items-center gap-1.5"><span class="w-4 h-4 rounded bg-yellow-100 border border-yellow-300 inline-block"></span><span>รวมสาย 16+19</span></span>
+        <span class="flex items-center gap-1.5"><span class="w-4 h-4 rounded bg-blue-100 border border-blue-300 inline-block"></span><span>เข้ากะดึก</span></span>
+        <button onclick="saveAll()" class="ml-auto flex items-center gap-2 bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm">
+          <i class="fas fa-floppy-disk"></i> บันทึกทั้งหมด</button>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <div class="bg-gradient-to-r from-slate-800 to-blue-900 px-6 py-4 flex items-center justify-between">
+        <h3 class="text-white font-bold text-lg flex items-center gap-2"><i class="fas fa-bus text-blue-300"></i> สายรถรับ-ส่ง พนักงาน</h3>
+        <span id="dtLbl" class="text-blue-200 text-sm"></span>
+      </div>
+      <div style="max-height:calc(100vh - 280px);overflow-y:auto;overflow-x:auto">
+        <table class="w-full text-sm min-w-[780px]">
+          <thead>
+            <tr class="bg-gray-50 border-b border-gray-200 text-slate-600">
+              <th class="text-left px-4 py-3 font-semibold min-w-[160px]">สายรถรับ-ส่ง</th>
+              <th class="text-center px-3 py-3 font-medium w-28">จุดงาน</th>
+              <th class="text-center px-3 py-3 font-semibold w-24">07:00 น.<br><span class="text-[10px] text-slate-400 font-normal">จำนวนมา</span></th>
+              <th class="text-center px-3 py-3 font-semibold w-24 text-blue-600">19:00 น.<br><span class="text-[10px] text-blue-400 font-normal">ทำ OT</span></th>
+              <th class="text-center px-3 py-3 font-semibold w-24 text-slate-500">16:00 น.<br><span class="text-[10px] text-slate-400 font-normal">ไม่ทำ OT</span></th>
+              <th class="text-left px-3 py-3 font-semibold min-w-[150px]">ปกติ/รวมสาย 16:00 น.</th>
+              <th class="text-left px-3 py-3 font-semibold min-w-[150px]">วิ่ง OT 19:00 น.</th>
+              <th class="text-center px-3 py-3 font-semibold w-36">เปลี่ยนสี</th>
+            </tr>
+          </thead>
+          <tbody id="busBody"><tr><td colspan="8" class="text-center py-10 text-slate-400">
+            <div class="w-7 h-7 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>กำลังโหลด...
+          </td></tr></tbody>
+          <tfoot>
+            <tr class="bg-slate-50 border-t-2 border-slate-200 font-bold">
+              <td class="px-4 py-3 text-slate-700" colspan="2">รวม</td>
+              <td class="px-3 py-3 text-center" id="ftTot">0</td>
+              <td class="px-3 py-3 text-center text-blue-700" id="ftOT">0</td>
+              <td class="px-3 py-3 text-center text-slate-500" id="ftNon">0</td>
+              <td colspan="3"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <div class="bg-gray-50 border-t border-gray-200 px-4 py-2.5 flex flex-wrap gap-4 text-xs text-slate-500">
+        สาย 16:00: <strong id="cG" class="text-green-700">0</strong> |
+        สาย 19:00: <strong id="cR" class="text-red-700">0</strong> |
+        รวมสาย: <strong id="cY" class="text-yellow-700">0</strong> |
+        กะดึก: <strong id="cB" class="text-blue-700">0</strong>
+      </div>
+    </div>
+  `;
+}
+
+async function loadSchedule(date){
+  const lbl=document.getElementById('dtLbl');
+  if(lbl) lbl.textContent='ประจำวันที่ '+App.dateThLong(date);
+  App.loading(true);
+  try{
+    const r=await fetch(`/api/ot/summary-bus?date=${date}`).then(r=>r.json());
+    buildTable(r.data||[], date);
+  }catch(e){ App.toast('โหลดข้อมูลไม่ได้','error'); }
+  finally{ App.loading(false); }
+}
+
+function buildTable(rows, date){
+  const b=document.getElementById('busBody'); if(!b) return;
+  let tTot=0,tOT=0,tNon=0;
+  rows.forEach(r=>{ tTot+=r.total_count; tOT+=r.ot_total; tNon+=r.non_ot_total; });
+
+  b.innerHTML=rows.map(r=>`
+    <tr id="br_${r.id}" data-id="${r.id}" data-color="${r.color_status||'none'}"
+      class="r${(r.color_status||'none')[0]} border-t border-gray-100 transition-all">
+      <td class="px-4 py-2.5 font-medium text-slate-700">${r.route_number==='0'?'มาเอง':`สาย ${r.route_number} <span class="text-slate-400 font-normal">${r.route_name}</span>`}</td>
+      <td class="px-3 py-2.5 text-center text-xs text-slate-400">${r.job_zone||''}</td>
+      <td class="px-3 py-2.5 text-center font-semibold text-slate-700">${r.total_count||0}</td>
+      <td class="px-3 py-2.5 text-center">${r.ot_total>0?`<span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-semibold text-xs">${r.ot_total}</span>`:`<span class="text-slate-300">0</span>`}</td>
+      <td class="px-3 py-2.5 text-center text-slate-400">${r.non_ot_total||0}</td>
+      <td class="px-3 py-2.5"><input type="text" value="${r.note_1600||''}" placeholder="ปกติ/รวมสาย..." class="ni n16" oninput="autoSave(${r.id},'${date}')"></td>
+      <td class="px-3 py-2.5"><input type="text" value="${r.note_1900||''}" placeholder="วิ่ง OT 19:00..." class="ni n19" oninput="autoSave(${r.id},'${date}')"></td>
+      <td class="px-3 py-2.5">
+        <div class="flex items-center justify-center gap-1">
+          <button class="cb bg-white border-gray-300 ${(r.color_status||'none')==='none'?'on':''}" onclick="setCol(${r.id},'none',this,'${date}')" title="ล้าง">
+            <i class="fas fa-times text-[10px] text-gray-400 block text-center leading-[22px]"></i></button>
+          <button class="cb bg-green-200  ${r.color_status==='green'?'on':''}"  onclick="setCol(${r.id},'green',this,'${date}')"  title="เลิก 16:00"></button>
+          <button class="cb bg-red-200    ${r.color_status==='red'?'on':''}"    onclick="setCol(${r.id},'red',this,'${date}')"    title="เลิก 19:00"></button>
+          <button class="cb bg-yellow-200 ${r.color_status==='yellow'?'on':''}" onclick="setCol(${r.id},'yellow',this,'${date}')" title="รวมสาย"></button>
+          <button class="cb bg-blue-200   ${r.color_status==='blue'?'on':''}"   onclick="setCol(${r.id},'blue',this,'${date}')"   title="กะดึก"></button>
+        </div>
+      </td>
+    </tr>`).join('');
+
+  document.getElementById('ftTot').textContent=tTot;
+  document.getElementById('ftOT').textContent=tOT;
+  document.getElementById('ftNon').textContent=tNon;
+  updateCounts();
+}
+
+function setCol(id,color,btn,date){
+  const tr=document.getElementById(`br_${id}`); if(!tr) return;
+  // ลบคลาสสีเก่า ใส่ใหม่
+  ['n','g','r','y','b'].forEach(c=>tr.classList.remove(`r${c}`));
+  const first=color==='none'?'n':color[0];
+  tr.classList.add(`r${first}`);
+  tr.dataset.color=color;
+  tr.querySelectorAll('.cb').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  updateCounts();
+}
+
+function updateCounts(){
+  const counts={none:0,green:0,red:0,yellow:0,blue:0};
+  document.querySelectorAll('#busBody tr[data-id]').forEach(tr=>{ counts[tr.dataset.color||'none']++; });
+  document.getElementById('cG').textContent=counts.green;
+  document.getElementById('cR').textContent=counts.red;
+  document.getElementById('cY').textContent=counts.yellow;
+  document.getElementById('cB').textContent=counts.blue;
+}
+
+function autoSave(id,date){
+  clearTimeout(timers[id]);
+  timers[id]=setTimeout(()=>saveRow(id,date),1500);
+}
+
+async function saveRow(id,date){
+  const tr=document.getElementById(`br_${id}`); if(!tr) return;
+  await fetch('/api/bus/schedule',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ date, bus_route_id:id, color_status:tr.dataset.color||'none',
+      note_1600:tr.querySelector('.n16')?.value||'', note_1900:tr.querySelector('.n19')?.value||'' })});
+}
+
+async function saveAll(){
+  const date=App.getDate();
+  const updates=[];
+  document.querySelectorAll('#busBody tr[data-id]').forEach(tr=>{
+    updates.push({ bus_route_id:tr.dataset.id, color_status:tr.dataset.color||'none',
+      note_1600:tr.querySelector('.n16')?.value||'', note_1900:tr.querySelector('.n19')?.value||'' });
+  });
+  App.loading(true);
+  try{
+    const r=await fetch('/api/bus/schedule/bulk',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({date,updates})}).then(r=>r.json());
+    if(r.success) App.toast('บันทึกทั้งหมดสำเร็จ ✓','success');
+    else App.toast('บันทึกไม่สำเร็จ: '+r.message,'error');
+  }catch(e){ App.toast('เกิดข้อผิดพลาด','error'); }
+  finally{ App.loading(false); }
+}
+</script>
+</body></html>

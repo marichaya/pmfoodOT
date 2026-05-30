@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>P.M Food – เข้าสู่ระบบ</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap');
+*{font-family:'Sarabun',sans-serif}
+body{background:linear-gradient(135deg,#0f2744 0%,#1e3a5f 45%,#1d4ed8 100%);min-height:100vh}
+.glass{background:rgba(255,255,255,.97);backdrop-filter:blur(24px)}
+.inp{transition:all .25s;border:1.5px solid #e2e8f0;background:#f8fafc}
+.inp:focus{border-color:#2563eb;background:#fff;box-shadow:0 0 0 3px rgba(37,99,235,.12);outline:none;transform:translateY(-1px)}
+.btn-primary{background:linear-gradient(135deg,#1e3a5f,#2563eb);transition:all .3s}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 8px 25px rgba(37,99,235,.45)}
+.btn-primary:active{transform:translateY(0)}
+.logo-pulse{animation:lp 2.5s ease-in-out infinite}
+@keyframes lp{0%,100%{box-shadow:0 0 0 0 rgba(37,99,235,.35)}60%{box-shadow:0 0 0 14px rgba(37,99,235,0)}}
+.float{animation:fl 3.5s ease-in-out infinite}
+@keyframes fl{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+.bg-blob{position:absolute;border-radius:50%;filter:blur(60px);opacity:.15;pointer-events:none}
+</style>
+</head>
+<body class="flex items-center justify-center p-4 relative overflow-hidden">
+
+<!-- Decorative blobs -->
+<div class="bg-blob w-96 h-96 bg-blue-400 -top-24 -right-24"></div>
+<div class="bg-blob w-80 h-80 bg-blue-300 -bottom-20 -left-20"></div>
+<div class="bg-blob w-48 h-48 bg-indigo-300 top-1/3 right-1/4"></div>
+
+<div class="glass rounded-3xl shadow-2xl w-full max-w-[420px] p-8 relative z-10">
+
+  <!-- Logo -->
+  <div class="text-center mb-8">
+    <div class="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-800 to-blue-500 shadow-xl logo-pulse float mb-4">
+      <i class="fas fa-industry text-white text-3xl"></i>
+    </div>
+    <h1 class="text-3xl font-bold text-slate-800 tracking-tight">P.M Food</h1>
+    <p class="text-slate-500 text-sm mt-1">ระบบจัดการ OT และสายรถ</p>
+    <div class="w-12 h-1 bg-gradient-to-r from-blue-600 to-blue-400 rounded-full mx-auto mt-3"></div>
+  </div>
+
+  <!-- Error -->
+  <div id="errBox" class="hidden mb-4 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 flex items-center gap-2 text-sm">
+    <i class="fas fa-circle-exclamation text-red-500 shrink-0"></i>
+    <span id="errMsg"></span>
+  </div>
+
+  <!-- Form -->
+  <form id="loginForm" class="space-y-5">
+    <div>
+      <label class="block text-sm font-semibold text-slate-700 mb-1.5"><i class="fas fa-user text-blue-500 mr-1.5"></i>Username</label>
+      <input id="username" type="text" placeholder="กรอก Username" autocomplete="username"
+        class="inp w-full px-4 py-3 rounded-xl text-slate-800 text-sm" required>
+    </div>
+    <div>
+      <label class="block text-sm font-semibold text-slate-700 mb-1.5"><i class="fas fa-lock text-blue-500 mr-1.5"></i>Password</label>
+      <div class="relative">
+        <input id="password" type="password" placeholder="กรอก Password" autocomplete="current-password"
+          class="inp w-full px-4 py-3 pr-11 rounded-xl text-slate-800 text-sm" required>
+        <button type="button" id="eyeBtn" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1">
+          <i class="fas fa-eye" id="eyeIcon"></i>
+        </button>
+      </div>
+    </div>
+    <button type="submit" id="submitBtn" class="btn-primary w-full py-3.5 text-white font-semibold rounded-xl flex items-center justify-center gap-2">
+      <i class="fas fa-right-to-bracket" id="submitIcon"></i>
+      <span id="submitTxt">เข้าสู่ระบบ</span>
+    </button>
+  </form>
+
+  <!-- Hint -->
+  <div class="mt-5 p-3.5 bg-slate-50 rounded-xl border border-slate-100 text-xs text-slate-500 space-y-1">
+    <p class="font-semibold text-slate-600 flex items-center gap-1"><i class="fas fa-circle-info text-blue-400"></i> ข้อมูล Login</p>
+    <p>• HR Admin → <span class="font-mono font-bold text-blue-600">hr</span> / รหัส hr1234</p>
+    <p>• หัวหน้าแผนก → username แผนก / รหัส <span class="font-mono font-bold text-blue-600">1234</span></p>
+  </div>
+
+  <p class="text-center text-xs text-slate-400 mt-4">© 2024 P.M Food Co., Ltd.</p>
+</div>
+
+<script>
+document.getElementById('eyeBtn').onclick = function(){
+  const p = document.getElementById('password');
+  const i = document.getElementById('eyeIcon');
+  p.type = p.type === 'password' ? 'text' : 'password';
+  i.className = p.type === 'password' ? 'fas fa-eye' : 'fas fa-eye-slash';
+};
+
+document.getElementById('loginForm').onsubmit = async function(e){
+  e.preventDefault();
+  const btn = document.getElementById('submitBtn');
+  const icon = document.getElementById('submitIcon');
+  const txt  = document.getElementById('submitTxt');
+  const err  = document.getElementById('errBox');
+  err.classList.add('hidden');
+  btn.disabled = true; icon.className = 'fas fa-spinner fa-spin'; txt.textContent = 'กำลังเข้าสู่ระบบ...';
+  try{
+    const r = await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({username:document.getElementById('username').value.trim(),password:document.getElementById('password').value})});
+    const d = await r.json();
+    if(d.success){ icon.className='fas fa-check'; txt.textContent='สำเร็จ!'; setTimeout(()=>location.href='/pages/dashboard.html',400); }
+    else{ document.getElementById('errMsg').textContent=d.message; err.classList.remove('hidden'); btn.disabled=false; icon.className='fas fa-right-to-bracket'; txt.textContent='เข้าสู่ระบบ'; }
+  }catch{ document.getElementById('errMsg').textContent='ไม่สามารถเชื่อมต่อ Server'; err.classList.remove('hidden'); btn.disabled=false; icon.className='fas fa-right-to-bracket'; txt.textContent='เข้าสู่ระบบ'; }
+};
+</script>
+</body>
+</html>
